@@ -33,41 +33,103 @@
         a:hover {
             text-decoration: underline;
         }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #333;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
     <script>
-        function checkIPv6() {
-            var statusText = document.querySelector('h1');
-            var timeout = setTimeout(function() {
-                statusText.textContent = "你的网络不支持IPv6";
-                var link = document.createElement("a");
+        let retryCount = 0; // 当前尝试次数
+        const maxRetries = 3; // 最大尝试次数
+
+        function updateStatusText(statusText, message, showSpinner = true) {
+            // 更新状态文本
+            statusText.innerHTML = showSpinner 
+                ? `<span class="spinner"></span> ${message}` 
+                : message;
+        }
+
+        function handleIPv6Failure(statusText) {
+            retryCount++;
+            if (retryCount <= maxRetries) {
+                updateStatusText(
+                    statusText, 
+                    `检测失败，正在尝试重新检测... (第 ${retryCount} 次尝试中)`
+                );
+                
+                setTimeout(checkIPv6, 3000); // 3秒后重试
+            } else {
+                // 全部失败后提示用户
+                updateStatusText(statusText, "检测失败，你的网络不支持 IPv6", false);
+                const link = document.createElement("a");
                 link.href = "https://ipv6ready.me/index.html.zh_CN";
                 link.textContent = "前往检查";
                 link.target = "_blank";
                 statusText.appendChild(link);
-            }, 5000);
+            }
+        }
 
-            fetch("https://nas.258008.xyz:4443", { method: 'GET', mode: 'no-cors' })
+        // H.265 支持检测
+        function checkH265Support() {
+            const video = document.createElement('video');
+            const h265Support = video.canPlayType('video/mp4; codecs="hev1.1.6.L93.B0"') || 
+                                video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"');
+
+            if (h265Support === 'probably' || h265Support === 'maybe') {
+                // 如果支持 H.265，跳转到网址1
+                
+                window.location.href = "https://nas.258008.xyz:5667/v/";
+            } else {
+                // 如果不支持 H.265，显示不支持的消息
+                document.getElementById("message").textContent = "当前浏览器不支持 H.265 (HEVC) 格式。";
+            }
+        }
+
+        function checkIPv6() {
+            
+            const statusText = document.querySelector('h1');
+            if (retryCount === 0) {
+
+                updateStatusText(statusText, "正在检查 IPv6 支持...");
+            }
+
+            // 动态生成 URL 防止缓存
+            const url = `https://nas.258008.xyz:4443?nocache=${Date.now()}`;
+
+            const timeout = setTimeout(() => handleIPv6Failure(statusText), 5000); // 超时处理
+
+            fetch(url, { method: 'GET', mode: 'no-cors' })
                 .then(response => {
-                    clearTimeout(timeout); 
-                    statusText.textContent = "跳转中...";
-                    window.location.href = "https://nas.258008.xyz:5667/v/";
+                    clearTimeout(timeout);
+                    
+                    updateStatusText(statusText, "", false);
+                    checkH265Support();
+                    // window.location.href = "https://nas.258008.xyz:5667/v/";
                 })
                 .catch(error => {
-                    clearTimeout(timeout); 
-                    statusText.textContent = "你的网络不支持IPv6";
-                    var link = document.createElement("a"); 
-                    link.href = "https://ipv6ready.me/index.html.zh_CN"; 
-                    link.textContent = "前往检查";  
-                    link.target = "_blank"; 
-                    statusText.appendChild(link);  
+                    clearTimeout(timeout);
+                    handleIPv6Failure(statusText);
                 });
         }
-        window.onload = function() {
-            checkIPv6();
-        };
+        
+
+        window.onload = checkIPv6;
+
     </script>
 </head>
 <body>
-    <h1>正在检查...</h1>
+    <h1></h1>
+    <h1 id="message"></h1>
 </body>
 </html>
